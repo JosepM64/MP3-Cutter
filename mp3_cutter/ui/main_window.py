@@ -602,7 +602,7 @@ class MainWindow(QMainWindow):
         else:
             self.play()
 
-    def seek_to(self, sec: float):
+    def seek_to(self, sec: float, clear_segment: bool = True):
         if not self.filepath:
             return
         sec = max(0.0, min(sec, self.duration if self.duration > 0 else sec))
@@ -611,7 +611,8 @@ class MainWindow(QMainWindow):
         self.wave.set_cursor(sec)
         self.slider.setValue(int(sec * 1000))
         self.lbl_time.setText(f"{fmt_time(sec)} / {fmt_time(self.duration)}")
-        self._playing_segment_idx = None
+        if clear_segment:
+            self._playing_segment_idx = None
         self._scroll_to_cursor()
 
     def _poll_cursor(self):
@@ -627,11 +628,12 @@ class MainWindow(QMainWindow):
             if self._playing_segment_idx is not None:
                 seg = self.segments[self._playing_segment_idx]
                 if pos >= seg.end - 0.08:  # small tolerance for Qt seek granularity
+                    idx = self._playing_segment_idx
                     self.pause()
-                    self.seek_to(seg.end)
+                    self.seek_to(seg.end, clear_segment=False)
                     self._playing_segment_idx = None
                     self.statusBar().showMessage(
-                        f"Fragment {self._playing_segment_idx + 1 if self._playing_segment_idx is not None else ''} finalitzat.",
+                        f"Fragment {idx + 1} finalitzat.",
                         2000,
                     )
 
@@ -649,6 +651,7 @@ class MainWindow(QMainWindow):
             seg = self.segments[self._playing_segment_idx]
             if sec >= seg.end - 0.05:
                 self.pause()
+                # keep seek without clearing yet, then clear
                 self._playing_segment_idx = None
 
     def _on_player_duration(self, ms: int):
@@ -797,8 +800,8 @@ class MainWindow(QMainWindow):
         if idx < 0 or idx >= len(self.segments):
             return
         seg = self.segments[idx]
+        self.seek_to(seg.start, clear_segment=False)
         self._playing_segment_idx = idx
-        self.seek_to(seg.start)
         # small delay to ensure seek before play (Qt needs media ready)
         QTimer.singleShot(80, self.play)
         self.statusBar().showMessage(

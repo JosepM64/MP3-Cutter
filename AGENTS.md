@@ -40,12 +40,14 @@ MP3-Cutter/
 - **0.1.0**: MVP Obrir→Reproduir→Dividir→Exportar, waveform, stream copy
 - **0.2.0**: Zoom 0.5–8x (Ctrl+Roda, slider, +/-/1:1), marques arrossegables, menú contextual, About (F1), dist 364 MB
 - **0.3.0**: **Clic al número de fragment a la waveform → solo playback** (`segmentClicked` → `_play_segment`), hint actualitzat
+- **0.3.1**: Fix solo playback — `seek_to(clear_segment=False)` + `_play_segment` preserva `idx`, `_poll_cursor` para exactament a `seg.end` (abans continuava per `seek_to` que esborrava `idx`)
 
 ## Build
 
 ```bat
 get_ffmpeg.bat   # primer cop, descarrega Essentials
 build.bat        # → dist\MP3Cutter\MP3Cutter.exe (364 MB)
+python main.py   # dev:  C:\Users\JM\miniconda3\envs\jm_pyside_313\python.exe main.py
 ```
 
 - `PYTHONNOUSERSITE=1`, path directe, `pushd "%~dp0"`, 1× `ffmpeg` (no duplicar), excloure QtQml/Quick/Pdf

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QScrollArea,
     QSlider,
     QStyle,
     QVBoxLayout,
@@ -189,11 +190,98 @@ class MainWindow(QMainWindow):
         top.addWidget(self.lbl_ffmpeg)
         root.addLayout(top)
 
-        # Waveform
+        # Waveform with zoom + scroll
         self.wave = WaveformWidget()
         self.wave.setStyleSheet("border-radius:8px;")
         self.wave.clickedAt.connect(self.seek_to)
-        root.addWidget(self.wave)
+        self.wave.splitRequested.connect(self._on_wave_split_request)
+        self.wave.splitsChanged.connect(self._on_wave_splits_changed)
+        self.wave.zoomChanged.connect(self._on_wave_zoom_changed)
+
+        self.wave_scroll = QScrollArea()
+        self.wave_scroll.setWidgetResizable(False)
+        self.wave_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.wave_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.wave_scroll.setFixedHeight(168)
+        self.wave_scroll.setStyleSheet(
+            "QScrollArea { background:#1e1e1e; border:1px solid #2e2e2e; border-radius:8px; }"
+            "QScrollBar:horizontal { height:10px; background:#1a1a1a; border-radius:4px; }"
+            "QScrollBar::handle:horizontal { background:#3a4a5a; border-radius:4px; min-width:40px; }"
+            "QScrollBar::handle:horizontal:hover { background:#4a6a8a; }"
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width:0; }"
+        )
+        self.wave_scroll.setWidget(self.wave)
+        # context menu for marker delete
+        self.wave.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.wave.customContextMenuRequested.connect(self._on_wave_context_menu)
+        root.addWidget(self.wave_scroll)
+
+        # Zoom bar
+        zoom_row = QHBoxLayout()
+        zoom_row.setSpacing(6)
+        zoom_label = QLabel("🔍 Zoom:")
+        zoom_label.setStyleSheet("color:#999; font-size:11px;")
+        self.btn_zoom_out = QPushButton("−")
+        self.btn_zoom_out.setFixedSize(28, 22)
+        self.btn_zoom_out.setToolTip("Allunyar (Ctrl + Roda avall)")
+        self.btn_zoom_out.setStyleSheet(_btn_small_style())
+        self.btn_zoom_out.clicked.connect(self.wave.zoom_out)
+
+        self.zoom_slider = QSlider(Qt.Orientation.Horizontal)
+        self.zoom_slider.setRange(0, len(WaveformWidget.ZOOM_LEVELS) - 1)
+        self.zoom_slider.setValue(1)  # 1.0x
+        self.zoom_slider.setFixedWidth(120)
+        self.zoom_slider.setStyleSheet(_slider_style(small=True))
+        self.zoom_slider.setToolTip(
+            "Arrossega per canviar zoom (o Ctrl+Roda sobre la waveform)"
+        )
+        self.zoom_slider.valueChanged.connect(self._on_zoom_slider)
+
+        self.btn_zoom_in = QPushButton("+")
+        self.btn_zoom_in.setFixedSize(28, 22)
+        self.btn_zoom_in.setToolTip("Apropar (Ctrl + Roda amunt)")
+        self.btn_zoom_in.setStyleSheet(_btn_small_style())
+        self.btn_zoom_in.clicked.connect(self.wave.zoom_in)
+
+        self.btn_zoom_reset = QPushButton("1:1")
+        self.btn_zoom_reset.setFixedSize(38, 22)
+        self.btn_zoom_reset.setToolTip("Zoom 1:1 (Ctrl+0)")
+        self.btn_zoom_reset.setStyleSheet(_btn_small_style())
+        self.btn_zoom_reset.clicked.connect(self.wave.reset_zoom)
+
+        self.btn_zoom_fit = QPushButton("Ajustar")
+        self.btn_zoom_fit.setFixedSize(58, 22)
+        self.btn_zoom_fit.setToolTip("Ajusta tota la cançó a la finestra")
+        self.btn_zoom_fit.setStyleSheet(_btn_small_style())
+        self.btn_zoom_fit.clicked.connect(self._zoom_fit)
+
+        self.lbl_zoom = QLabel("1.0x")
+        self.lbl_zoom.setFixedWidth(40)
+        self.lbl_zoom.setStyleSheet("color:#90caf9; font-weight:700; font-size:11px;")
+        self.lbl_zoom.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.lbl_zoom_hint = QLabel(
+            "Ctrl+Roda / Doble clic afegeix tall  •  Arrossega groc per moure"
+        )
+        self.lbl_zoom_hint.setStyleSheet("color:#666; font-size:10px;")
+        self.lbl_zoom_hint.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        zoom_row.addWidget(zoom_label)
+        zoom_row.addWidget(self.btn_zoom_out)
+        zoom_row.addWidget(self.zoom_slider)
+        zoom_row.addWidget(self.btn_zoom_in)
+        zoom_row.addWidget(self.btn_zoom_reset)
+        zoom_row.addWidget(self.btn_zoom_fit)
+        zoom_row.addWidget(self.lbl_zoom)
+        zoom_row.addSpacing(10)
+        zoom_row.addWidget(self.lbl_zoom_hint, 1)
+        root.addLayout(zoom_row)
 
         # Time + slider row
         time_row = QHBoxLayout()
@@ -302,9 +390,19 @@ class MainWindow(QMainWindow):
         bottom.addWidget(self.btn_export)
         root.addLayout(bottom)
 
+        # Menu Ajuda -> Sobre
+        menubar = self.menuBar()
+        menubar.setStyleSheet(
+            "QMenuBar { background:#1e1e1e; color:#ccc; } QMenuBar::item:selected { background:#2a3a4a; } QMenu { background:#222; color:#ddd; border:1px solid #333; } QMenu::item:selected { background:#2a6cb6; }"
+        )
+        help_menu = menubar.addMenu("Ajuda")
+        act_about = help_menu.addAction("Sobre MP3 Cutter…")
+        act_about.setShortcut("F1")
+        act_about.triggered.connect(self._show_about)
+
         # Status bar
         self.statusBar().setStyleSheet("color:#999; font-size:11px;")
-        self.statusBar().showMessage("Llestos. Obre un MP3 per començar.")
+        self.statusBar().showMessage("Llestos. Obre un MP3 per començar.  •  F1 Sobre")
 
         # Shortcuts
         from PySide6.QtGui import QKeySequence, QShortcut
@@ -314,6 +412,10 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+O"), self, activated=self.open_file)
         QShortcut(QKeySequence("Ctrl+E"), self, activated=self.export_segments)
         QShortcut(QKeySequence("Delete"), self, activated=self._delete_last_split)
+        QShortcut(QKeySequence("Ctrl++"), self, activated=self.wave.zoom_in)
+        QShortcut(QKeySequence("Ctrl+="), self, activated=self.wave.zoom_in)
+        QShortcut(QKeySequence("Ctrl+-"), self, activated=self.wave.zoom_out)
+        QShortcut(QKeySequence("Ctrl+0"), self, activated=self.wave.reset_zoom)
 
     # --- ffmpeg check ---
     def _check_ffmpeg(self):
@@ -509,6 +611,7 @@ class MainWindow(QMainWindow):
         self.slider.setValue(int(sec * 1000))
         self.lbl_time.setText(f"{fmt_time(sec)} / {fmt_time(self.duration)}")
         self._playing_segment_idx = None
+        self._scroll_to_cursor()
 
     def _poll_cursor(self):
         if self.player.is_playing() and not self._slider_dragging:
@@ -517,6 +620,8 @@ class MainWindow(QMainWindow):
             self.wave.set_cursor(pos)
             self.slider.setValue(int(pos * 1000))
             self.lbl_time.setText(f"{fmt_time(pos)} / {fmt_time(self.duration)}")
+            if self.wave.zoom() > 1.0:
+                self._scroll_to_cursor()
             # check segment end
             if self._playing_segment_idx is not None:
                 seg = self.segments[self._playing_segment_idx]
@@ -537,6 +642,8 @@ class MainWindow(QMainWindow):
         self.wave.set_cursor(sec)
         self.slider.setValue(ms)
         self.lbl_time.setText(f"{fmt_time(sec)} / {fmt_time(self.duration)}")
+        if self.wave.zoom() > 1.0 and self.player.is_playing():
+            self._scroll_to_cursor()
         if self._playing_segment_idx is not None:
             seg = self.segments[self._playing_segment_idx]
             if sec >= seg.end - 0.05:
@@ -865,6 +972,95 @@ class MainWindow(QMainWindow):
                 return
         event.ignore()
 
+    # --- Zoom & marker helpers ---
+    def _on_wave_split_request(self, sec: float):
+        # double click on wave -> add split
+        self.cursor_sec = sec
+        self.player.set_position_sec(sec)
+        self.wave.set_cursor(sec)
+        self.slider.setValue(int(sec * 1000))
+        self.split_here()
+
+    def _on_wave_splits_changed(self, splits: list[float]):
+        self.split_points = sorted(splits)
+        self._rebuild_segments()
+        self._refresh_list()
+        self.statusBar().showMessage(
+            f"Marques actualitzades — {len(self.split_points)} talls", 2000
+        )
+
+    def _on_wave_zoom_changed(self, factor: float):
+        self.lbl_zoom.setText(f"{factor:.1f}x")
+        # sync slider without recursion
+        try:
+            idx = WaveformWidget.ZOOM_LEVELS.index(factor)
+        except ValueError:
+            idx = 1
+        self.zoom_slider.blockSignals(True)
+        self.zoom_slider.setValue(idx)
+        self.zoom_slider.blockSignals(False)
+        self.btn_zoom_reset.setEnabled(factor != 1.0)
+        # keep cursor visible
+        self._scroll_to_cursor()
+
+    def _on_zoom_slider(self, idx: int):
+        if 0 <= idx < len(WaveformWidget.ZOOM_LEVELS):
+            self.wave.set_zoom(WaveformWidget.ZOOM_LEVELS[idx])
+
+    def _zoom_fit(self):
+        self.wave.reset_zoom()
+        # ensure scroll at 0
+        self.wave_scroll.horizontalScrollBar().setValue(0)
+
+    def _scroll_to_cursor(self):
+        if self.duration <= 0 or self.wave.zoom() <= 1.0:
+            return
+        # x of cursor in wave coordinates -> scroll to center it
+        x = self.wave._sec_to_x(self.cursor_sec)
+        viewport_w = self.wave_scroll.viewport().width()
+        hbar = self.wave_scroll.horizontalScrollBar()
+        target = int(x - viewport_w / 2)
+        # smooth
+        hbar.setValue(max(0, min(target, hbar.maximum())))
+
+    def _on_wave_context_menu(self, pos):
+        # pos is in wave widget coords
+        global_pos = self.wave.mapToGlobal(pos)
+        # find nearest split
+        x = pos.x()
+        idx = self.wave._find_split_at_x(x)
+        from PySide6.QtWidgets import QMenu
+
+        menu = QMenu(self)
+        if idx is not None:
+            sec = self.wave._splits[idx]
+            act_del = menu.addAction(f"✕ Esborrar tall  {fmt_time(sec)}")
+            act_del_all = menu.addAction("Netejar tots els talls")
+            menu.addSeparator()
+            act_play = menu.addAction("▶ Reproduir fragment anterior")
+            chosen = menu.exec(global_pos)
+            if chosen == act_del:
+                self.split_points.remove(sec)
+                self._rebuild_segments()
+                self.wave.set_splits(self.split_points)
+                self._refresh_list()
+            elif chosen == act_del_all:
+                self.clear_splits()
+            elif chosen == act_play:
+                # play segment before this split
+                for i, seg in enumerate(self.segments):
+                    if abs(seg.end - sec) < 0.01:
+                        self._play_segment(max(0, i - 1) if i > 0 else 0)
+                        break
+        else:
+            sec = self.wave._x_to_sec(x)
+            act_add = menu.addAction(f"✂ Afegir tall a {fmt_time(sec)}")
+            act_add.setEnabled(0.2 < sec < self.duration - 0.2)
+            chosen = menu.exec(global_pos)
+            if chosen == act_add:
+                self.seek_to(sec)
+                self.split_here()
+
     # --- UI state ---
     def _update_ui_state(self):
         has_file = self.filepath is not None
@@ -874,6 +1070,98 @@ class MainWindow(QMainWindow):
         self.btn_play.setEnabled(has_file)
         self.btn_pause.setEnabled(False)
         self.btn_stop.setEnabled(has_file)
+        # zoom enabled only with file
+        for w in (
+            self.btn_zoom_in,
+            self.btn_zoom_out,
+            self.btn_zoom_reset,
+            self.btn_zoom_fit,
+            self.zoom_slider,
+        ):
+            w.setEnabled(has_file and has_dur)
+
+    def _show_about(self):
+        import sys
+
+        import numpy
+        import PySide6
+
+        from mp3_cutter import __app_name__, __version__
+
+        ff_ver = "no trobat"
+        ff_path = find_ffmpeg()
+        if ff_path:
+            try:
+                import subprocess
+
+                cp = subprocess.run(
+                    [str(ff_path), "-version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+                if cp.returncode == 0:
+                    ff_ver = cp.stdout.splitlines()[0].strip()[:90]
+                else:
+                    ff_ver = str(ff_path)
+            except Exception:
+                ff_ver = str(ff_path)
+
+        try:
+            import PyInstaller
+
+            pi_ver = PyInstaller.__version__
+        except Exception:
+            pi_ver = "—"
+
+        html = f"""
+        <div style='font-family:Segoe UI; font-size:11pt;'>
+        <h2 style='margin:0; color:#4fc3f7;'>{__app_name__} <span style='color:#90caf9; font-size:11pt;'>v{__version__}</span></h2>
+        <p style='margin:4px 0 8px 0; color:#aaa;'>Obrir → Reproduir → Dividir → Exportar<br>
+        <span style='font-size:9pt; color:#666;'>Stream copy amb FFmpeg — sense pèrdua de qualitat</span></p>
+        <hr style='border:none; border-top:1px solid #333; margin:8px 0;'>
+        <p style='margin:4px 0;'><b>Autor:</b> Josep Maria Tapia<br>
+        <b>Web:</b> <a href='https://www.posicionamientowebysem.com/' style='color:#4fc3f7;'>https://www.posicionamientowebysem.com/</a></p>
+        <hr style='border:none; border-top:1px solid #333; margin:8px 0;'>
+        <p style='margin:4px 0; font-size:9pt; color:#bbb;'>
+        <b>Python</b> {sys.version.split()[0]} &nbsp;|&nbsp;
+        <b>PySide6</b> {PySide6.__version__} &nbsp;|&nbsp;
+        <b>NumPy</b> {numpy.__version__}<br>
+        <b>FFmpeg</b> {ff_ver}<br>
+        <b>PyInstaller</b> {pi_ver}
+        </p>
+        <p style='margin:8px 0 0 0; font-size:8pt; color:#666;'>
+        © 2026 Josep Maria Tapia — Llicència MIT<br>
+        Icona i FFmpeg Essentials amb llicències pròpies
+        </p>
+        </div>
+        """
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Sobre {__app_name__}")
+        dlg.setMinimumWidth(420)
+        dlg.setStyleSheet("QDialog { background:#1e1e1e; }")
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(16, 16, 16, 12)
+        lab = QLabel(html)
+        lab.setTextFormat(Qt.TextFormat.RichText)
+        lab.setWordWrap(True)
+        lab.setOpenExternalLinks(True)
+        lab.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextBrowserInteraction
+            | Qt.TextInteractionFlag.LinksAccessibleByMouse
+        )
+        lab.setStyleSheet("color:#ddd;")
+        lay.addWidget(lab)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        btns.setStyleSheet(
+            "QPushButton { background:#2a6cb6; color:white; border:none; border-radius:6px; padding:6px 18px; min-width:80px; }"
+            "QPushButton:hover { background:#337ed1; }"
+        )
+        btns.accepted.connect(dlg.accept)
+        lay.addWidget(btns)
+        dlg.exec()
 
     def closeEvent(self, event):
         if self._wave_worker and self._wave_worker.isRunning():

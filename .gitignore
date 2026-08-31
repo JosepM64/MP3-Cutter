@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.spec
+*.egg-info/
+resources/ffmpeg/ffmpeg.exe
+resources/ffmpeg/ffprobe.exe
+resources/ffmpeg/ffplay.exe

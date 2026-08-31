@@ -12,7 +12,7 @@ Projecte Windows portable per tallar MP3 amb precisió visual. Prioritat: **simp
 
 - Màxim 5 bullets a la resposta final
 - Validar amb `ruff format` + `py_compile` abans de commit
-- Commits en català, versió semàntica (`0.3.0` actual)
+- Commits en català, versió semàntica (`0.3.1` actual → propera `0.4.0`)
 - Push a `https://github.com/JosepM64/MP3-Cutter` amb tag `vX.Y.Z`
 
 ## Estructura
@@ -66,4 +66,7 @@ python main.py   # dev:  C:\Users\JM\miniconda3\envs\jm_pyside_313\python.exe ma
 ## Roadmap
 
 - 0.3 → solo per clic, AGENTS.md
-- 0.4 → exportar només seleccionats, renombrar fragments, normalització opcional
+- 0.3.1 → fix solo stop
+- 0.4 → **potenciòmetre de volum** més visible (knob / vertical + tooltip dB + mute), exportar només seleccionats, renombrar fragments, normalització opcional
+
+Nota volum actual: ja existeix `🔊 QSlider 0–100 → AudioPlayer.set_volume()` a `main_window.py:338` (transport bar dreta), però a 0.4 es farà més prominent.

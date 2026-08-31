@@ -197,6 +197,7 @@ class MainWindow(QMainWindow):
         self.wave.splitRequested.connect(self._on_wave_split_request)
         self.wave.splitsChanged.connect(self._on_wave_splits_changed)
         self.wave.zoomChanged.connect(self._on_wave_zoom_changed)
+        self.wave.segmentClicked.connect(self._play_segment)
 
         self.wave_scroll = QScrollArea()
         self.wave_scroll.setWidgetResizable(False)
@@ -265,7 +266,7 @@ class MainWindow(QMainWindow):
         self.lbl_zoom.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.lbl_zoom_hint = QLabel(
-            "Ctrl+Roda / Doble clic afegeix tall  •  Arrossega groc per moure"
+            "Ctrl+Roda zoom • Doble clic afegeix • Clic numero = solo • Arrossega groc"
         )
         self.lbl_zoom_hint.setStyleSheet("color:#666; font-size:10px;")
         self.lbl_zoom_hint.setAlignment(

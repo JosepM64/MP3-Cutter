@@ -11,6 +11,7 @@ class WaveformWidget(QWidget):
     splitRequested = Signal(float)
     splitsChanged = Signal(list)  # list[float] when marker dragged
     zoomChanged = Signal(float)
+    segmentClicked = Signal(int)  # idx fragment clicat al número
 
     ZOOM_LEVELS = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0]
 
@@ -415,9 +416,36 @@ class WaveformWidget(QWidget):
             return
         super().wheelEvent(event)
 
+    def _segment_index_at(self, sec: float) -> int | None:
+        if not self._splits or self._duration <= 0:
+            return 0 if self._duration > 0 else None
+        pts = [0.0] + self._splits + [self._duration]
+        pts = sorted(pts)
+        for i in range(len(pts) - 1):
+            if pts[i] <= sec < pts[i + 1] or (i == len(pts) - 2 and sec == pts[i + 1]):
+                return i
+        return None
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             x = event.position().x()
+            y = event.position().y()
+            # click al número de fragment (zona central) -> solo playback
+            if self._duration > 0 and self._peaks is not None:
+                h = self.height()
+                wave_top = 10
+                wave_h = h - 32
+                mid_y = wave_top + wave_h / 2.0
+                # zona central on es dibuixa el número (aprox ±12px)
+                if abs(y - mid_y) < 14:
+                    sec = self._x_to_sec(x)
+                    seg_idx = self._segment_index_at(sec)
+                    if seg_idx is not None:
+                        # evitar confondre amb drag de marca groga
+                        if self._find_split_at_x(x) is None:
+                            self.segmentClicked.emit(seg_idx)
+                            event.accept()
+                            return
             # check if click near split marker -> start drag
             idx = self._find_split_at_x(x)
             if idx is not None:
@@ -426,7 +454,6 @@ class WaveformWidget(QWidget):
                 self.update()
                 event.accept()
                 return
-            # double click -> add split
             sec = self._x_to_sec(x)
             self.clickedAt.emit(sec)
             self.set_cursor(sec)
@@ -464,7 +491,7 @@ class WaveformWidget(QWidget):
             event.accept()
             return
 
-        # hover handling + cursor change near marker
+        # hover handling + cursor change near marker / segment number
         if self._duration > 0:
             idx = self._find_split_at_x(x)
             if idx is not None:
@@ -473,9 +500,29 @@ class WaveformWidget(QWidget):
                     f"Arrossega per moure el tall {self._fmt_time_label(self._splits[idx])} (clic dret per esborrar)"
                 )
             else:
-                self.setCursor(Qt.CursorShape.PointingHandCursor)
-                sec = self._x_to_sec(x)
-                self.setToolTip(f"{self._fmt_time_label(sec)} — Ctrl+Roda per zoom")
+                # segment number hover
+                y = event.position().y()
+                h = self.height()
+                wave_top = 10
+                wave_h = h - 32
+                mid_y = wave_top + wave_h / 2.0
+                if abs(y - mid_y) < 14 and self._peaks is not None:
+                    sec = self._x_to_sec(x)
+                    seg_idx = self._segment_index_at(sec)
+                    if seg_idx is not None:
+                        self.setCursor(Qt.CursorShape.PointingHandCursor)
+                        self.setToolTip(
+                            f"Clic al número per escoltar SOLO fragment {seg_idx + 1} ▶"
+                        )
+                    else:
+                        self.setCursor(Qt.CursorShape.PointingHandCursor)
+                        self.setToolTip(
+                            f"{self._fmt_time_label(self._x_to_sec(x))} — Ctrl+Roda per zoom"
+                        )
+                else:
+                    self.setCursor(Qt.CursorShape.PointingHandCursor)
+                    sec = self._x_to_sec(x)
+                    self.setToolTip(f"{self._fmt_time_label(sec)} — Ctrl+Roda per zoom")
             sec = self._x_to_sec(x)
             self._hover_pos = sec
             self.update()
